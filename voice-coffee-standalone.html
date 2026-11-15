@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BaristaAI — голосовая 3D-кофемашина</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Unbounded:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg1:#f4f7fa;--bg2:#cfd8e3;--panel:rgba(255,255,255,.88);--ink:#14213d;--mute:#5b6b82;--line:#d5dce6;--acc:#0e7c86;--acc-ink:#fff;--code:#f3f6f9;--bad:#c0392b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg1:#1d2b3a;--bg2:#0c131b;--panel:rgba(23,35,47,.9);--ink:#e8eef5;--mute:#93a3b8;--line:#2c3e52;--acc:#5cc8d0;--acc-ink:#06242a;--code:#0f1821;--bad:#ff7a6b}}
+:root[data-theme="dark"]{--bg1:#1d2b3a;--bg2:#0c131b;--panel:rgba(23,35,47,.9);--ink:#e8eef5;--mute:#93a3b8;--line:#2c3e52;--acc:#5cc8d0;--acc-ink:#06242a;--code:#0f1821;--bad:#ff7a6b}
+*,*:before,*:after{box-sizing:inherit}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg2);color:var(--ink);font:400 15px/1.45 Manrope,system-ui,sans-serif}
+#stage{position:fixed;inset:0;background:radial-gradient(ellipse at 40% 35%,var(--bg1),var(--bg2));touch-action:none}
+#stage canvas{display:block;width:100%;height:100%}
+.hud{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+.hud>*{pointer-events:auto}
+h1{font:600 clamp(22px,4vw,32px)/1.1 Unbounded,Manrope,sans-serif;margin:0;letter-spacing:-.02em}
+.sub{color:var(--mute);font-size:13px;max-width:34ch}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 12px}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.panel{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:380px;max-width:calc(100% - 32px);background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:12px}
+@media(max-width:700px){.panel{left:8px;right:8px;width:auto;max-width:none;bottom:calc(8px + env(safe-area-inset-bottom,0px))}.hud{left:10px;right:10px}.chat{height:110px!important}}
+.bar{display:flex;gap:8px;align-items:center}
+#mic{width:52px;height:52px;flex:none;border-radius:50%;border:0;background:var(--acc);color:var(--acc-ink);font-size:22px;padding:0}
+#mic.on{animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--acc) 28%,transparent)}}
+input[type=text],input[type=password]{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--code);color:var(--ink);font:inherit}
+.chat{display:flex;flex-direction:column;gap:6px;height:190px;overflow-y:auto;margin:10px 0}
+.msg{max-width:92%;padding:7px 11px;border-radius:12px;font-size:14px}
+.bot{background:var(--code);border:1px solid var(--line);align-self:flex-start}
+.me{background:var(--acc);color:var(--acc-ink);align-self:flex-end}
+.bad{border-color:var(--bad);color:var(--bad)}
+.hint{color:var(--mute);font-size:13px}
+.stages{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 12px}
+.stages li{display:flex;gap:5px;align-items:center;color:var(--mute);font-size:12.5px}
+.stages li:before{content:"";width:8px;height:8px;border-radius:50%;border:2px solid var(--line)}
+.stages li.act{color:var(--ink);font-weight:600}.stages li.act:before{background:var(--acc);border-color:var(--acc)}
+.stages li.done:before{background:var(--mute);border-color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{font-size:12.5px;padding:5px 9px;color:var(--mute)}
+.pipe{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+.pipe span{padding:3px 9px;border-radius:99px;border:1px solid var(--line);font-size:12px;color:var(--mute);transition:.2s}
+.pipe span.act{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+pre{margin:6px 0 0;background:var(--code);border:1px solid var(--line);border-radius:10px;padding:8px;overflow:auto;max-height:110px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+details{margin-top:8px}summary{cursor:pointer;color:var(--mute);font-size:13px}
+.min .body{display:none}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="stage" role="img" aria-label="Интерактивная 3D-модель кофемашины"></div>
+<div class="hud">
+<div><h1>BaristaAI</h1><div class="sub">Вращайте модель мышью или пальцем. Нажмите на кнопку с микрофоном на самой машине.</div></div>
+<div class="btns"><button id="vWhole">Вся машина</button><button id="vCup">Чашка</button><button id="theme" aria-label="Сменить тему">Тема</button></div>
+</div>
+
+<section class="panel" id="panel" aria-label="Заказ">
+<div class="bar">
+<button id="mic" aria-label="Говорить">🎤</button>
+<input type="text" id="inp" placeholder="Или напишите заказ" aria-label="Заказ текстом">
+<button class="pri" id="send">ОК</button>
+<button id="fold" aria-label="Свернуть панель">▾</button>
+</div>
+<div class="hint" id="state" style="margin-top:6px">Скажите, например: «большой латте с рисунком посудомоечной машины»</div>
+<div class="body">
+<div class="chat" id="chat" aria-live="polite"></div>
+<ol class="stages" id="stages"><li>Помол</li><li>Экстракция</li><li>Молоко</li><li>Рисунок</li><li>Готово</li></ol>
+<div class="chips" id="chips"></div>
+<details><summary>Что происходит внутри</summary>
+<div class="pipe" id="pipe"><span>Микрофон</span><span>Речь → текст</span><span>ИИ: разбор</span><span>Фильтр</span><span>Заказ JSON</span><span>Контроллер</span></div>
+<pre id="json">{ "status": "ожидание" }</pre>
+<pre id="log">[boot] система запущена</pre>
+<input type="password" id="key" placeholder="API-ключ Anthropic (необязательно)" aria-label="API-ключ" style="width:100%;margin-top:8px;flex:none"><div class="hint">С ключом работает любой рисунок. Без ключа — простой режим с готовыми узорами. Ключ нигде не сохраняется.</div>
+</details>
+</div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const T=window.THREE;
+const MILK="#fff6e8",DARK="#5a3515",NS="http://www.w3.org/2000/svg";
+const BAD=/убий|убит|убива|убью|кров|расчлен|труп|оруж|пистолет|винтовк|граната|взрыв|теракт|изнасил|пытк|самоубий|суицид|расстрел|резн|насили|свастик|порно|секс|голая|голый|отрубл|казн|жесток/i;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const ease=p=>1-Math.pow(1-p,3);
+let busy=false,hist=[],ledC="#5cc8d0",listening=false,hover=false;
+const blank=()=>({drink:null,size_ml:null,milk:false,extras:[],art_title:null,art_svg:null});
+let st=blank();
+
+/* ---------- UI ---------- */
+const say=(t,c)=>{const d=document.createElement("div");d.className="msg "+c;d.textContent=t;$("chat").appendChild(d);$("chat").scrollTop=1e9};
+const log=t=>{const l=$("log");l.textContent+="\n"+new Date().toLocaleTimeString("ru")+" "+t;l.scrollTop=1e9};
+const lit=i=>[...$("pipe").children].forEach((e,k)=>e.classList.toggle("act",k===i));
+function speak(t){try{if(!window.speechSynthesis)return;const u=new SpeechSynthesisUtterance(t);u.lang="ru-RU";speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+
+/* ---------- 3D сцена ---------- */
+let renderer,scene,camera,controls,ok=false;
+const tw=[];const tween=(ms,fn)=>new Promise(res=>tw.push({t0:performance.now(),ms,fn,res}));
+const sc=document.createElement("canvas");sc.width=512;sc.height=192;const sx=sc.getContext("2d");
+let stex,ring,micG,liq,surf,cup,stream,beans,machine,puffs=[],shake=0,steam=0,lvlY=.12,tex,tx,artC=null,artP=0,mix=0,bubbles=[];
+const tc=document.createElement("canvas");tc.width=tc.height=512;tx=tc.getContext("2d");
+for(let i=0;i<90;i++){const a=Math.random()*6.28,r=Math.sqrt(Math.random())*230;bubbles.push([256+Math.cos(a)*r,256+Math.sin(a)*r,1+Math.random()*4])}
+let scrA="Готова к заказу",scrB="Нажмите на микрофон";
+function scr(a,b){scrA=a;scrB=b||"";if(!ok)return;sx.fillStyle="#0b1a24";sx.fillRect(0,0,512,192);
+ sx.fillStyle="#5cc8d0";sx.font="700 36px Manrope,system-ui,sans-serif";sx.fillText(a,24,70,464);
+ sx.fillStyle="#9fb3c4";sx.font="400 25px Manrope,system-ui,sans-serif";sx.fillText(b,24,112,464);
+ sx.fillStyle=ledC;sx.beginPath();sx.arc(32,160,7,0,6.3);sx.fill();
+ sx.fillStyle="#6f8498";sx.font="18px ui-monospace,Menlo,monospace";sx.fillText("online · mqtt://barista/cmd",50,166,440);stex.needsUpdate=true}
+function led(c){ledC=c;if(ok){ring.material.emissive.set(c);scr(scrA,scrB)}}
+
+function paintTop(){
+ const l=(a,b)=>Math.round(a+(b-a)*mix);
+ const g=tx.createRadialGradient(256,256,10,256,256,256);
+ g.addColorStop(0,`rgb(${l(158,214)},${l(98,170)},${l(48,122)})`);
+ g.addColorStop(.8,`rgb(${l(120,190)},${l(72,140)},${l(34,96)})`);
+ g.addColorStop(1,`rgb(${l(78,150)},${l(44,104)},${l(20,70)})`);
+ tx.fillStyle=g;tx.fillRect(0,0,512,512);
+ tx.fillStyle="rgba(255,235,205,.12)";bubbles.forEach(b=>{tx.beginPath();tx.arc(b[0],b[1],b[2],0,6.3);tx.fill()});
+ if(artC&&artP>0){
+  const e=ease(artP),canF="filter" in tx;
+  tx.save();tx.beginPath();tx.arc(256,256,Math.max(8,238*e),0,6.3);tx.clip();
+  const pass=(f,a)=>{tx.globalAlpha=a*Math.min(1,artP*2.5);if(canF)tx.filter=f;else{tx.shadowColor=MILK;tx.shadowBlur=14}tx.drawImage(artC,0,0)};
+  pass("blur(8px)",.5);pass("blur(3.5px)",.85);pass("blur(1.2px)",.55);
+  tx.restore();tx.filter="none";tx.shadowBlur=0;tx.globalAlpha=1}
+ tex.needsUpdate=true}
+
+function drawNode(x,el){
+ for(const e of el.children){
+  const t=e.localName;if(t==="g"){drawNode(x,e);continue}
+  const n=k=>parseFloat(e.getAttribute(k))||0;let p;
+  try{
+   if(t==="path")p=new Path2D(e.getAttribute("d")||"");
+   else{p=new Path2D();
+    if(t==="circle")p.arc(n("cx"),n("cy"),n("r"),0,6.2832);
+    else if(t==="ellipse")p.ellipse(n("cx"),n("cy"),n("rx"),n("ry"),0,0,6.2832);
+    else if(t==="rect")p.rect(n("x"),n("y"),n("width"),n("height"));
+    else if(t==="line"){p.moveTo(n("x1"),n("y1"));p.lineTo(n("x2"),n("y2"))}
+    else{const q=(e.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number);for(let i=0;i+1<q.length;i+=2)i?p.lineTo(q[i],q[i+1]):p.moveTo(q[i],q[i+1]);if(t==="polygon")p.closePath()}}
+   if(e.getAttribute("fill")==="none"){x.strokeStyle=MILK;x.lineWidth=n("stroke-width")||3;x.stroke(p)}
+   else{x.fillStyle=e.getAttribute("fill")||MILK;x.fill(p)}
+  }catch(_){}}}
+function renderArt(g){const c=document.createElement("canvas");c.width=c.height=512;const x=c.getContext("2d");x.translate(256,256);x.scale(6,6);x.translate(-50,-50);x.lineCap="round";x.lineJoin="round";drawNode(x,g);return c}
+
+function setLevel(t){
+ if(t<=.001){liq.visible=surf.visible=false;lvlY=.12;return}
+ liq.visible=surf.visible=true;const y=.12+t*.68,r=.45+(y-.12)*.269;
+ liq.geometry.dispose();liq.geometry=new T.CylinderGeometry(r,.44,y-.12,40,1,true);liq.position.y=(y+.12)/2;
+ surf.position.y=y;surf.scale.set(r,r,1);lvlY=y;
+ liq.material.color.lerpColors(new T.Color(0x3b1f0c),new T.Color(0xc9955e),mix)}
+
+let camFrom=null;
+const fit=()=>Math.max(1,1.2/camera.aspect);
+function camTo(name){
+ const dir=new T.Vector3(6.6,2.6,9.6).multiplyScalar(fit());
+ const tgt=name==="cup"?new T.Vector3(0,1.1,1.8):new T.Vector3(0,2.4,.3);
+ const pos=name==="cup"?new T.Vector3(.3,4.3,4.3):tgt.clone().add(dir);
+ const p0=camera.position.clone(),t0=controls.target.clone();
+ return tween(1000,p=>{const e=ease(p);camera.position.lerpVectors(p0,pos,e);controls.target.lerpVectors(t0,tgt,e)})}
+
+function miniOrbit(cam,el){const c={target:new T.Vector3(),dx:0,dy:0,z:1,update(){const o=cam.position.clone().sub(c.target),s=new T.Spherical().setFromVector3(o);s.theta-=c.dx;s.phi=Math.min(1.5,Math.max(.2,s.phi-c.dy));s.radius=Math.min(18,Math.max(3,s.radius*c.z));c.dx=c.dy=0;c.z=1;cam.position.copy(c.target).add(o.setFromSpherical(s));cam.lookAt(c.target)}};let d=null;el.addEventListener('pointerdown',e=>d=[e.clientX,e.clientY]);addEventListener('pointerup',()=>d=null);el.addEventListener('pointermove',e=>{if(d){c.dx+=(e.clientX-d[0])*.006;c.dy+=(e.clientY-d[1])*.006;d=[e.clientX,e.clientY]}});el.addEventListener('wheel',e=>{c.z*=e.deltaY>0?1.08:.92;e.preventDefault()},{passive:false});return c}
+function showErr(e){const d=document.createElement('div');d.style.cssText='position:fixed;left:16px;top:90px;max-width:420px;padding:12px;border:1px solid var(--bad);border-radius:10px;color:var(--bad);background:var(--panel);font-size:14px';d.textContent='3D не запустилось: '+((e&&e.message)||e)+'. Откройте страницу по прямой ссылке в Chrome.';document.body.appendChild(d);say('3D не запустилось: '+((e&&e.message)||e),'bot bad')}
+function build(){
+ const stage=$("stage");
+ renderer=new T.WebGLRenderer({antialias:true,alpha:true});
+ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+ renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
+ renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+ stage.appendChild(renderer.domElement);
+ scene=new T.Scene();camera=new T.PerspectiveCamera(36,1,.1,100);
+ controls=T.OrbitControls?new T.OrbitControls(camera,renderer.domElement):miniOrbit(camera,renderer.domElement);
+ if(T.OrbitControls){controls.enableDamping=true;controls.enablePan=false;controls.minDistance=3;controls.maxDistance=18;controls.maxPolarAngle=Math.PI/2.03}
+
+ /* окружение для бликов металла */
+ const pm=new T.PMREMGenerator(renderer),es=new T.Scene(),gc=document.createElement("canvas");gc.width=2;gc.height=256;
+ const gx=gc.getContext("2d"),gr=gx.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#e6eef7");gr.addColorStop(.55,"#8795a6");gr.addColorStop(1,"#3a4350");gx.fillStyle=gr;gx.fillRect(0,0,2,256);
+ es.add(new T.Mesh(new T.SphereGeometry(20,32,16),new T.MeshBasicMaterial({map:new T.CanvasTexture(gc),side:T.BackSide})));
+ [[0,12,6,10,3],[-13,5,2,3,7],[13,6,0,3,7],[0,4,-12,10,3]].forEach(([x,y,z,w,h])=>{const m=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:new T.Color(3,3,3),side:T.DoubleSide}));m.position.set(x,y,z);m.lookAt(0,0,0);es.add(m)});
+ try{scene.environment=pm.fromScene(es,.02).texture}catch(err){console.warn(err)}
+
+ const key=new T.DirectionalLight(0xffffff,1.6);key.position.set(5,10,7);key.castShadow=true;key.shadow.mapSize.set(2048,2048);
+ Object.assign(key.shadow.camera,{left:-7,right:7,top:8,bottom:-4,near:1,far:30});key.shadow.bias=-.0004;scene.add(key);
+ scene.add(new T.HemisphereLight(0xdfeaff,0x445566,.5));
+ const gnd=new T.Mesh(new T.CircleGeometry(12,48),new T.ShadowMaterial({opacity:.3}));gnd.rotation.x=-Math.PI/2;gnd.receiveShadow=true;scene.add(gnd);
+
+ const M=(c,m,r,o)=>new T.MeshStandardMaterial(Object.assign({color:c,metalness:m,roughness:r},o||{}));
+ const mBody=M(0x2f4858,.6,.35),mChrome=M(0xdbe3ec,1,.16),mBlack=M(0x14181d,.4,.45),mCer=M(0xfdfdfb,0,.22,{side:T.DoubleSide}),mTray=M(0x1d2630,.8,.3);
+ const add=(m,p,x,y,z)=>{m.castShadow=m.receiveShadow=true;m.position.set(x||0,y||0,z||0);(p||machine).add(m);return m};
+ function rbox(w,h,d,r,mat){const s=new T.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);
+  const b=.05,g=new T.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:3,curveSegments:10});g.translate(0,0,-(d-2*b)/2);return new T.Mesh(g,mat)}
+ machine=new T.Group();scene.add(machine);
+
+ add(rbox(4.2,.5,2.6,.12,mBody),0,0,.25,0);
+ add(rbox(4,4.7,1,.15,mBody),0,0,2.35,-.75);
+ add(rbox(4,2.7,2.5,.22,mBody),0,0,3.35,.1);
+ add(new T.Mesh(new T.BoxGeometry(3.2,.14,2.9),mTray),0,0,.57,.95);
+ for(let i=0;i<9;i++)add(new T.Mesh(new T.BoxGeometry(2.8,.04,.07),M(0x5a6878,.9,.3)),0,0,.66,-.35+i*.3);
+
+ /* бункер с зёрнами */
+ const glass=new T.Mesh(new T.CylinderGeometry(.8,.85,.95,40,1,true),M(0xcfe6f2,.1,.05,{transparent:true,opacity:.28,side:T.DoubleSide,depthWrite:false}));add(glass,0,0,5.18,-.2);
+ add(new T.Mesh(new T.CylinderGeometry(.88,.88,.12,40),mBlack),0,0,5.7,-.2);
+ beans=new T.InstancedMesh(new T.SphereGeometry(.09,10,8),M(0x4a2a14,0,.6),70);const d=new T.Object3D();
+ for(let i=0;i<70;i++){const a=Math.random()*6.28,r=Math.sqrt(Math.random())*.66;d.position.set(Math.cos(a)*r,4.82+Math.random()*.5,-.2+Math.sin(a)*r);d.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);d.scale.set(1,.7,.6);d.updateMatrix();beans.setMatrixAt(i,d.matrix)}
+ machine.add(beans);
+
+ /* экран */
+ stex=new T.CanvasTexture(sc);stex.encoding=T.sRGBEncoding;
+ const scrM=new T.Mesh(new T.PlaneGeometry(2.7,1.0125),new T.MeshBasicMaterial({map:stex,toneMapped:false}));scrM.position.set(0,4.05,1.38);machine.add(scrM);
+ add(rbox(2.9,1.2,.12,.1,mBlack),0,0,4.05,1.33);
+
+ /* кнопка-микрофон */
+ micG=new T.Group();micG.position.set(0,3.05,1.38);machine.add(micG);
+ const cap=new T.Mesh(new T.CylinderGeometry(.36,.36,.16,40),M(0x1b2530,.5,.3));cap.rotation.x=Math.PI/2;micG.add(cap);
+ ring=new T.Mesh(new T.TorusGeometry(.46,.045,16,64),new T.MeshStandardMaterial({color:0x111111,emissive:0x5cc8d0,emissiveIntensity:1.4}));ring.position.z=.02;micG.add(ring);
+ const wm=new T.MeshBasicMaterial({color:0xffffff});
+ const pill=new T.Mesh(new T.CylinderGeometry(.07,.07,.16,16),wm);pill.position.set(0,.05,.1);micG.add(pill);
+ [.13,-.03].forEach(y=>{const s=new T.Mesh(new T.SphereGeometry(.07,16,12),wm);s.position.set(0,y,.1);micG.add(s)});
+ const arc=new T.Mesh(new T.TorusGeometry(.13,.018,8,24,Math.PI),wm);arc.rotation.z=Math.PI;arc.position.set(0,.04,.1);micG.add(arc);
+ const st1=new T.Mesh(new T.CylinderGeometry(.015,.015,.1,8),wm);st1.position.set(0,-.18,.1);micG.add(st1);
+ [-1.4,1.4].forEach(x=>{const b=new T.Mesh(new T.CylinderGeometry(.17,.17,.1,32),mChrome);b.rotation.x=Math.PI/2;add(b,0,x,3.05,1.38)});
+
+ /* группа, портафильтр, носики */
+ add(new T.Mesh(new T.CylinderGeometry(.44,.5,.3,40),mChrome),0,0,1.85,.55);
+ add(new T.Mesh(new T.CylinderGeometry(.38,.34,.14,40),mBlack),0,0,1.66,.55);
+ add(new T.Mesh(new T.BoxGeometry(.18,.14,.95),mBlack),0,0,1.66,1.35);
+ [-.1,.1].forEach(x=>add(new T.Mesh(new T.CylinderGeometry(.035,.03,.18,12),mChrome),0,x,1.5,.55));
+
+ /* паровой кран */
+ const curve=new T.CatmullRomCurve3([new T.Vector3(-1.6,2.0,.9),new T.Vector3(-1.6,1.55,1.05),new T.Vector3(-1.3,1.2,.9),new T.Vector3(-.95,1.15,.72)]);
+ add(new T.Mesh(new T.TubeGeometry(curve,30,.045,10),mChrome),0,0,0,0);
+ for(let i=0;i<14;i++){const p=new T.Mesh(new T.SphereGeometry(.07,10,8),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0}));p.userData={t:Math.random()};scene.add(p);puffs.push(p)}
+
+ /* чашка */
+ cup=new T.Group();cup.position.set(0,.66,.55);scene.add(cup);
+ const prof=[[.01,0],[.42,0],[.5,.05],[.64,.5],[.71,.9],[.72,.93],[.67,.93],[.66,.9],[.45,.12],[.01,.12]].map(a=>new T.Vector2(a[0],a[1]));
+ add(new T.Mesh(new T.LatheGeometry(prof,56),mCer),cup,0,0,0);
+ const hd=new T.Mesh(new T.TorusGeometry(.24,.05,12,28,Math.PI),mCer);hd.rotation.z=-Math.PI/2;add(hd,cup,.69,.5,0);
+ liq=new T.Mesh(new T.BufferGeometry(),M(0x3b1f0c,0,.4,{side:T.DoubleSide}));cup.add(liq);
+ tex=new T.CanvasTexture(tc);tex.encoding=T.sRGBEncoding;tex.anisotropy=8;
+ surf=new T.Mesh(new T.CircleGeometry(1,56),new T.MeshStandardMaterial({map:tex,roughness:.32,metalness:0}));surf.rotation.x=-Math.PI/2;cup.add(surf);
+ stream=new T.Mesh(new T.CylinderGeometry(1,1,1,12),new T.MeshStandardMaterial({color:0x3b1f0c,roughness:.3}));stream.visible=false;scene.add(stream);
+ setLevel(0);paintTop();ok=true;scr(scrA,scrB);
+
+ resize();camera.position.copy(new T.Vector3(6.6,2.6,9.6).multiplyScalar(fit()).add(new T.Vector3(0,2.4,.3)));controls.target.set(0,2.4,.3);
+ addEventListener("resize",resize);
+
+ /* клик по 3D-кнопке */
+ const ray=new T.Raycaster(),pt=new T.Vector2();let dn=null;
+ const hit=e=>{const r=renderer.domElement.getBoundingClientRect();pt.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(pt,camera);return ray.intersectObject(micG,true).length>0};
+ const cv=renderer.domElement;
+ cv.addEventListener("pointerdown",e=>dn=[e.clientX,e.clientY]);
+ cv.addEventListener("pointerup",e=>{if(dn&&Math.hypot(e.clientX-dn[0],e.clientY-dn[1])<6&&hit(e))startMic();dn=null});
+ cv.addEventListener("pointermove",e=>{hover=hit(e);cv.style.cursor=hover?"pointer":"grab"});
+ requestAnimationFrame(loop)}
+
+function resize(){
+ const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;
+ const mob=w<700;camera.setViewOffset(w,h,mob?0:w*.1,mob?h*.16:0,w,h);camera.updateProjectionMatrix()}
+
+function loop(now){
+ requestAnimationFrame(loop);
+ for(let i=tw.length-1;i>=0;i--){const k=tw[i],p=Math.min(1,(now-k.t0)/k.ms);k.fn(p);if(p>=1){tw.splice(i,1);k.res()}}
+ const t=now/1000;
+ const pulse=listening?1.6+Math.sin(t*9)*.6:1.1+Math.sin(t*2)*.35;ring.material.emissiveIntensity=pulse;
+ micG.scale.setScalar(micG.scale.x+((hover?1.08:1)-micG.scale.x)*.2);
+ machine.position.x=shake?Math.sin(t*90)*.012*shake:0;
+ beans.rotation.y=shake?Math.sin(t*40)*.02*shake:0;
+ if(stream.visible){const ytop=cup.position.y+lvlY,L=Math.max(.02,1.45-ytop);stream.scale.set(.035,L,.035);stream.position.set(0,1.45-L/2,.55)}
+ puffs.forEach(p=>{if(steam){p.userData.t=(p.userData.t+.012)%1;const u=p.userData.t;p.position.set(-.95+Math.sin(u*9+p.id)*.08,1.2+u*1.1,.72);p.material.opacity=(1-u)*.5*steam;p.scale.setScalar(1+u*2.5)}else p.material.opacity=0});
+ controls.update();renderer.render(scene,camera)}
+
+/* ---------- ИИ ---------- */
+const SYS=`Ты — ИИ-бариста голосовой кофемашины. Пользователь говорит заказ по-русски. Верни ТОЛЬКО JSON, без markdown и пояснений.
+Схема: {"safe":true,"refusal":"","cancel":false,"order":{"drink":null,"size_ml":null,"milk":false,"extras":[],"art_title":null,"art_svg":null},"ask":null,"say":""}
+Правила:
+1) Сначала проверь безопасность всего запроса, включая просьбу о рисунке. Жестокость, насилие, кровь, оружие, самоповреждение, сексуальный, ненавистнический или экстремистский контент: safe=false, refusal — вежливый отказ с предложением нарисовать что-то другое. Безобидное (посудомоечная машина, кот, ёлка, ноутбук, логотип) разрешено.
+2) Объедини запрос с текущим заказом (он дан ниже), ничего не теряй. «Отмена» или «заново»: cancel=true.
+3) Нужны напиток и size_ml (150, 250 или 350; маленький/средний/большой). Если чего-то нет — задай ОДИН вопрос в ask. milk=true для латте, капучино, флэт уайт, раф, мокко, макиато. Для молочных напитков, если рисунок не назван, спроси в ask, какой нужен (можно «на ваш выбор»). Эспрессо и американо рисунка не имеют. Не кофе (еда, алкоголь): вежливо откажи через say, drink=null.
+4) Если рисунок назван (любой предмет, животное, сюжет) или пользователь доверил выбор тебе — заполни art_title (2–4 слова) и art_svg. Если рисунок не нужен — art_title="без рисунка", art_svg=null. Если рисунок не менялся, оставь art_title и верни art_svg=null.
+5) art_svg — только содержимое svg, viewBox 0 0 100 100, фигура внутри круга радиуса 36 с центром 50,50. Теги: g,path,circle,ellipse,line,polyline,polygon,rect. Атрибуты: d,cx,cy,r,rx,ry,x,y,width,height,points,x1,y1,x2,y2,stroke-width,stroke-linecap,stroke-linejoin,fill. fill только "milk" (белая пена), "dark" (тёмные детали) или "none" (линия молока). Стиль: крупный простой узнаваемый силуэт молочной пеной, 8–30 элементов, толщина линий 3–5, без тонких деталей и текста.
+6) Когда заказ полон, ask=null, а say — короткое подтверждение. Иначе say дублирует ask.`;
+const parseJSON=t=>{t=t.replace(/```json|```/g,"").trim();return JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1))};
+
+function cleanArt(code){
+ const doc=new DOMParser().parseFromString(`<svg xmlns="${NS}">${code}</svg>`,"image/svg+xml");
+ if(doc.querySelector("parsererror"))return null;
+ const TG=["g","path","circle","ellipse","line","polyline","polygon","rect"];
+ const AT=["d","cx","cy","r","rx","ry","x","y","width","height","points","x1","y1","x2","y2","stroke-width"];
+ let n=0;const g=document.createElementNS(NS,"g");
+ (function walk(src,dst){for(const el of src.children){const tag=el.localName;if(!TG.includes(tag)||++n>80)continue;
+  const e=document.createElementNS(NS,tag);
+  for(const a of AT)if(el.hasAttribute(a)){const v=el.getAttribute(a);if(v.length<800&&/^[\w\s.,\-+#]*$/.test(v))e.setAttribute(a,v)}
+  const f=el.getAttribute("fill");e.setAttribute("fill",f==="none"?"none":f==="dark"?DARK:MILK);
+  dst.appendChild(e);if(tag==="g")walk(el,e)}})(doc.documentElement,g);
+ return n?g:null}
+
+const noArt=()=>!st.milk||/^без/i.test(st.art_title||"");
+const ready=()=>st.drink&&st.size_ml&&(noArt()||(st.art_title&&st._g));
+
+
+let sample=null;
+async function askAI(prompt){
+ if(sample){const res=await sample(prompt,{modelTier:"default",cache:false});return res.text}
+ const k=($("key")&&$("key").value.trim())||"";
+ if(!k)return null;
+ const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
+ if(!r.ok)throw new Error("API "+r.status);
+ const d=await r.json();return d.content.map(c=>c.text||"").join("")}
+const LEAF='<path d="M50 20V82M30 36Q50 26 70 36M27 50Q50 38 73 50M31 64Q50 54 69 64" fill="none" stroke-width="5"/>';
+const ART={"сердц":["сердце",'<path d="M50 78C20 56 24 28 40 30c6 1 10 6 10 10 0-4 4-9 10-10 16-2 20 26-10 48z" fill="milk"/>'],
+"тюльпан":["тюльпан",'<ellipse cx="50" cy="66" rx="22" ry="9" fill="milk"/><ellipse cx="50" cy="54" rx="17" ry="8" fill="milk"/><ellipse cx="50" cy="43" rx="11" ry="7" fill="milk"/><line x1="50" y1="30" x2="50" y2="78" stroke-width="3" fill="none"/>'],
+"розетт":["розетта",LEAF],"лист":["листик",LEAF],
+"кот":["кот",'<circle cx="50" cy="55" r="24" fill="milk"/><polygon points="30,42 32,22 46,34" fill="milk"/><polygon points="70,42 68,22 54,34" fill="milk"/><circle cx="42" cy="53" r="3" fill="dark"/><circle cx="58" cy="53" r="3" fill="dark"/><polygon points="50,60 46,64 54,64" fill="dark"/>'],
+"звезд":["звезда",'<polygon points="50,18 58,40 82,42 63,56 70,80 50,66 30,80 37,56 18,42 42,40" fill="milk"/>']};
+function localParse(text){
+ const t=text.toLowerCase().replace(/ё/g,"е");
+ if(/отмен|заново|сброс/.test(t))return{safe:true,cancel:true,say:"Заказ отменён."};
+ const o={drink:null,size_ml:null,extras:[],art_title:null,art_svg:null};
+ [["эспрессо","Эспрессо",0],["американо","Американо",0],["капучино","Капучино",1],["латте","Латте",1],["флэт","Флэт уайт",1],["флет","Флэт уайт",1],["макиато","Макиато",1],["мокко","Мокко",1],["раф","Раф",1]].forEach(([k,n,m])=>{if(t.includes(k)){o.drink=n;o.milk=!!m}});
+ if(/маленьк|небольш/.test(t))o.size_ml=150;else if(/средн/.test(t))o.size_ml=250;else if(/больш|крупн/.test(t))o.size_ml=350;
+ [[/ванил/,"ваниль"],[/карамел/,"карамель"],[/овсян/,"овсяное молоко"],[/сахар/,"сахар"]].forEach(([r,n])=>{if(r.test(t))o.extras.push(n)});
+ const drink=o.drink||st.drink,size=o.size_ml||st.size_ml,milk=o.milk!==undefined?o.milk:st.milk;
+ const none=/без (рисунк|узор)/.test(t);
+ if(milk&&!none){const key=Object.keys(ART).find(k=>t.includes(k));
+  if(key){o.art_title=ART[key][0];o.art_svg=ART[key][1]}
+  else if(/выбор|любой|удиви/.test(t)){o.art_title="сердце";o.art_svg=ART["сердц"][1]}}
+ else if(none||!milk)o.art_title="без рисунка";
+ let ask=null;
+ if(!drink)ask="Какой кофе приготовить?";
+ else if(!size)ask="Какой размер: маленький, средний или большой?";
+ else if(milk&&!o.art_title&&!st.art_title)ask="Какой рисунок? В простом режиме есть: сердце, тюльпан, розетта, листик, кот, звезда. Для любого рисунка вставьте API-ключ в разделе «Что происходит внутри».";
+ return{safe:true,order:o,ask,say:ask||"Готовлю ваш заказ."}}
+
+async function handle(text){
+ if(busy||!text.trim())return;
+ busy=true;say(text,"me");$("inp").value="";
+ try{
+  lit(2);scr("Думаю…",text.slice(0,30));led("#f2c14e");
+  if(BAD.test(text)){await refuse("Такой заказ я выполнить не могу. Давайте нарисуем что-нибудь добрее: кота, ёлку, ноутбук?","локальный фильтр");return}
+  const prompt=SYS+"\n\nТекущий заказ: "+JSON.stringify({...st,art_svg:st._g?"(есть)":null,_g:undefined})+"\n\nПоследние реплики: "+JSON.stringify(hist.slice(-6))+"\n\nНовая фраза пользователя: "+JSON.stringify(text);
+  let r;
+  try{const raw=await askAI(prompt);if(raw)r=parseJSON(raw);else{r=localParse(text);log("простой режим (без ИИ)")}}
+  catch(e){log("ИИ: ошибка "+(e.code||e.message));say("Не удалось связаться с ИИ. Попробуйте ещё раз.","bot bad");scr("Ошибка","Повторите заказ");led("#c0392b");return}
+  lit(3);await wait(250);hist.push({user:text});
+  const o=r.order||{};
+  if(r.safe===false||BAD.test([r.say,r.ask,r.refusal,o.art_title].join(" "))){await refuse(r.refusal&&!BAD.test(r.refusal)?r.refusal:"Такой рисунок я не нарисую. Выберите что-нибудь другое.","фильтр ИИ");return}
+  if(r.cancel){st=blank();say(r.say||"Заказ отменён.","bot");scr("Готова к заказу","Заказ отменён");led("#5cc8d0");$("json").textContent='{ "status": "отменено" }';lit(-1);return}
+  if(o.drink)st.drink=o.drink;if(o.size_ml)st.size_ml=+o.size_ml;
+  if(typeof o.milk==="boolean")st.milk=o.milk;
+  if(Array.isArray(o.extras)&&o.extras.length)st.extras=o.extras.map(String).slice(0,6);
+  if(o.art_title)st.art_title=String(o.art_title).slice(0,40);
+  if(o.art_svg){const g=cleanArt(o.art_svg);if(g){st._g=g;st.art_svg="ok"}else{st.art_title=null;st._g=null;r.ask="Рисунок получился неудачным. Опишите его другими словами."}}
+  $("json").textContent=JSON.stringify({drink:st.drink,size_ml:st.size_ml,milk:st.milk,extras:st.extras,art:st.art_title,art_vector:st._g?"[SVG, "+st._g.children.length+" эл.]":null},null,2);
+  log("ИИ: заказ обновлён");
+  if(!ready()&&!r.ask)r.ask=!st.drink?"Какой кофе приготовить?":!st.size_ml?"Какой размер: маленький, средний или большой?":"Какой рисунок сделать на пенке?";
+  if(!ready()){say(r.ask,"bot");speak(r.ask);scr("Уточняю…",r.ask.slice(0,34));led("#5cc8d0");lit(-1);return}
+  lit(4);const m=r.say||"Готовлю ваш заказ.";say(m,"bot");speak(m);lit(5);
+  await brew();
+ }finally{busy=false}}
+
+async function refuse(msg,why){
+ lit(3);log("Фильтр: запрос отклонён ("+why+")");
+ say(msg,"bot bad");speak(msg);scr("Заказ отклонён","Контент не подходит");led("#c0392b");
+ $("json").textContent='{ "status": "отклонено фильтром" }';await wait(2500);led("#5cc8d0");scr("Готова к заказу","Нажмите на микрофон");lit(-1)}
+
+/* ---------- приготовление ---------- */
+async function brew(){
+ if(!ok){say("3D-сцена не запустилась, но заказ принят.","bot");st=blank();return}
+ const li=[...$("stages").children],size=st.size_ml;
+ const finalT=.45+Math.min(size,350)/350*.4,coffeeT=st.milk?finalT*.55:finalT;
+ artC=(!noArt()&&st._g)?renderArt(st._g):null;artP=0;mix=0;
+ cup.position.set(0,.66,.55);setLevel(0);paintTop();
+ const stage=i=>li.forEach((x,k)=>x.className=k<i?"done":k===i?"act":"");
+ li.forEach(x=>x.className="");camTo("whole");
+ stage(0);scr(st.drink,"Помол зёрен…");log("ctrl: помол");shake=1;await wait(1200);
+ stage(1);scr(st.drink,"Экстракция…");log("ctrl: экстракция");shake=.4;stream.material.color.set(0x3b1f0c);stream.visible=true;
+ await tween(2400,p=>setLevel(coffeeT*ease(p)));stream.visible=false;shake=0;
+ if(st.milk){
+  stage(2);scr(st.drink,"Взбиваю молоко…");log("ctrl: молоко");steam=1;stream.material.color.set(0xfff1dc);stream.visible=true;
+  await tween(2000,p=>{mix=ease(p);setLevel(coffeeT+(finalT-coffeeT)*ease(p));paintTop()});steam=0;stream.visible=false}
+ if(artC){stage(3);scr(st.drink,"Рисую: "+st.art_title);log("ctrl: рисунок «"+st.art_title+"»");
+  await tween(3200,p=>{artP=p;paintTop()})}
+ stage(4);scr("Напиток готов",st.drink+" · "+size+" мл");led("#7ddc8a");log("ctrl: заказ выполнен");
+ say("Ваш напиток готов. Чашка выдвинута вперёд — посмотрите на рисунок сверху.","bot");
+ await tween(1300,p=>{cup.position.z=.55+1.3*ease(p)});await camTo("cup");
+ st=blank();lit(-1);setTimeout(()=>led("#5cc8d0"),3000)}
+
+/* ---------- голос ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function startMic(){
+ if(busy)return;
+ if(!SR){say("Голосовой ввод недоступен в этом браузере. Введите заказ текстом.","bot");return}
+ try{const r=new SR();r.lang="ru-RU";
+  r.onstart=()=>{listening=true;$("mic").classList.add("on");lit(0);scr("Слушаю…","Назовите заказ");led("#f2c14e");$("state").textContent="Слушаю…"};
+  r.onend=()=>{listening=false;$("mic").classList.remove("on");$("state").textContent="Нажмите на микрофон и говорите"};
+  r.onerror=e=>{listening=false;$("mic").classList.remove("on");led("#5cc8d0");say("Микрофон не включился ("+e.error+"). Разрешите доступ или введите заказ текстом.","bot bad")};
+  r.onresult=e=>{lit(1);handle(e.results[0][0].transcript)};r.start()}
+ catch(e){say("Микрофон недоступен. Введите заказ текстом.","bot bad")}}
+$("mic").onclick=startMic;
+$("send").onclick=()=>handle($("inp").value);
+$("inp").onkeydown=e=>{if(e.key==="Enter")handle($("inp").value)};
+$("vWhole").onclick=()=>ok&&camTo("whole");$("vCup").onclick=()=>ok&&camTo("cup");
+$("fold").onclick=()=>$("panel").classList.toggle("min");
+["Большой латте с рисунком посудомоечной машины","Капучино средний, нарисуй кота-программиста","Американо маленький","Латте с рисунком на твой выбор","Отмена"].forEach(t=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>handle(t);$("chips").appendChild(b)});
+$("theme").onclick=()=>{const d=document.documentElement,dk=matchMedia("(prefers-color-scheme:dark)").matches,c=d.dataset.theme||(dk?"dark":"light");d.dataset.theme=c==="dark"?"light":"dark"};
+say("Здравствуйте! Скажите заказ и любой рисунок для пенки. Жестокие и неприличные просьбы я не выполняю.","bot");
+try{if(!T)throw new Error('библиотека three.js не загрузилась');build()}catch(e){console.error(e);showErr(e)}
+(async()=>{try{if(window.claude)sample=await claude.use("sample")}catch(e){}if(!sample)log("автономный режим: нужен API-ключ для любых рисунков")})();
+</script>
+</body>
+</html>
